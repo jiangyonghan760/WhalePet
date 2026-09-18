@@ -1,0 +1,23 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+env/
+
+# 运行时生成的文件（每个人的窗口位置、设置都不一样，不该进版本库）
+.pet_pos.json
+.pet_cfg.json
+
+# 打包 / 构建产物
+build/
+dist/
+*.spec
+*.egg-info/
+
+# 编辑器 / 系统垃圾
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+desktop.ini

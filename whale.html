@@ -1,0 +1,721 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>AI 桌宠</title>
+<style>
+  :root { --accent: #3b57e8; --accent-soft: #ffd6ec; }
+  html, body {
+    margin: 0; padding: 0; width: 100%; height: 100%;
+    overflow: hidden; background: transparent;
+    user-select: none; -webkit-user-select: none; cursor: default;
+    font-family: "Microsoft YaHei", "PingFang SC", sans-serif;
+  }
+  /* #stage 按角色尺寸整体缩放：改 scale 变量即可，窗口由宿主同步 resize */
+  #stage { position: absolute; left: 0; top: 0; width: 260px; height: 400px;
+           transform-origin: 0 0; }
+  #pet { position: absolute; width: 240px; height: 300px; left: 10px; top: 90px;
+         transition: left 1.6s cubic-bezier(.34,.8,.4,1), top 1.6s cubic-bezier(.34,.8,.4,1); }
+  #pet.walk { transition: left 2.4s linear, top 2.4s linear; }
+
+  #flip { width: 240px; height: 300px; transition: transform .4s ease; }
+  #flip.left { transform: scaleX(-1); }
+
+  #sprite { width: 240px; height: 300px; animation: idle 2.8s ease-in-out infinite;
+            transform-origin: 50% 80%; will-change: transform; backface-visibility: hidden; }
+  #pet.sleep #sprite { animation: idle 5.2s ease-in-out infinite; filter: brightness(.82); }
+  #body { width: 100%; height: 100%; object-fit: contain; pointer-events: none; display: block;
+          will-change: transform; backface-visibility: hidden; }
+
+  @keyframes idle {
+    0%, 100% { transform: translateY(0) scale(1) rotate(0deg); }
+    25% { transform: translateY(-6px) scale(1.015) rotate(-1.2deg); }
+    50% { transform: translateY(-10px) scale(1) rotate(0deg); }
+    75% { transform: translateY(-6px) scale(1.015) rotate(1.2deg); }
+  }
+
+  #pet.poke #sprite { animation: poke .5s ease; }
+  @keyframes poke {
+    0%,100% { transform: translateX(0) scale(1) }
+    25% { transform: translateX(-7px) scale(1.06,.94) }
+    60% { transform: translateX(6px) scale(.95,1.05) }
+  }
+  #pet.jump #sprite { animation: jump .7s cubic-bezier(.3,-0.4,.5,1.4); }
+  @keyframes jump {
+    0%,100% { transform: translateY(0) rotate(0) }
+    40% { transform: translateY(-46px) rotate(-8deg) }
+    70% { transform: translateY(0) rotate(6deg) }
+  }
+  #pet.happy #sprite { animation: happy .8s ease; }
+  @keyframes happy {
+    0%,100% { transform: rotate(0) }
+    20% { transform: rotate(-12deg) scale(1.05) }
+    50% { transform: rotate(12deg) scale(1.05) }
+    80% { transform: rotate(-6deg) }
+  }
+  #pet.talk #sprite { animation: talk .5s ease-in-out infinite; }
+  @keyframes talk {
+    0%,100% { transform: rotate(0) scale(1) translateY(0) }
+    50% { transform: rotate(-1.6deg) scale(1.02) translateY(-3px) }
+  }
+
+  #bubble {
+    position: absolute; left: 50%; top: -10px; transform: translate(-50%,-100%) scale(.85);
+    max-width: 250px; padding: 10px 16px; border-radius: 18px;
+    background: linear-gradient(180deg, #fff6fb 0%, #eef3ff 100%);
+    color: #6b4a7a; font-size: 15px; line-height: 1.5; font-weight: 600;
+    box-shadow: 0 6px 18px rgba(186,140,224,.35); border: 2px solid var(--accent-soft);
+    opacity: 0; pointer-events: none; white-space: pre-wrap; word-break: break-word;
+    z-index: 60; transition: opacity .2s, transform .2s cubic-bezier(.34,1.6,.5,1);
+  }
+  #bubble.show { opacity: 1; transform: translate(-50%,-100%) scale(1); }
+  #bubble::after {
+    content: ""; position: absolute; left: 50%; bottom: -8px; margin-left: -8px;
+    border: 8px solid transparent; border-top-color: var(--accent-soft);
+  }
+
+  .fx { position: absolute; font-size: 20px; pointer-events: none; animation: rise 1.1s ease-out forwards; }
+  @keyframes rise {
+    0% { opacity: 0; transform: translate(-50%,0) scale(.5) }
+    25% { opacity: 1; transform: translate(-50%,-18px) scale(1.15) }
+    100% { opacity: 0; transform: translate(-50%,-62px) scale(.85) }
+  }
+
+  #spout { position: absolute; left: 50%; top: 18%; width: 0; height: 0; }
+  .drop {
+    position: absolute; left: 0; top: 0; width: 8px; height: 8px; border-radius: 50%;
+    background: rgba(140,190,255,.95); box-shadow: 0 0 4px rgba(140,190,255,.7);
+    pointer-events: none; opacity: 0;
+  }
+  @keyframes spurt {
+    0% { opacity: 0; transform: translate(-50%,0) scale(.3); }
+    15% { opacity: 1; transform: translate(-55%,-16px) scale(1); }
+    100% { opacity: 0; transform: translate(var(--dx),-70px) scale(.5); }
+  }
+
+  #menu {
+    position: absolute; min-width: 156px; padding: 6px; border-radius: 10px;
+    background: #fff; border: 1px solid #e3e8f5; box-shadow: 0 8px 26px rgba(30,50,120,.2);
+    display: none; z-index: 99;
+    max-height: 388px; overflow-y: auto; overscroll-behavior: contain;
+  }
+  #menu.show { display: block; }
+  #menu::-webkit-scrollbar { width: 6px; }
+  #menu::-webkit-scrollbar-thumb { background: #c9d3ea; border-radius: 3px; }
+  #menu::-webkit-scrollbar-track { background: transparent; }
+  #menu div { padding: 5px 11px; font-size: 12.5px; color: #333; border-radius: 7px; cursor: pointer; white-space: nowrap; }
+  #menu div:hover { background: #eef2ff; color: var(--accent); }
+  #menu div.on { color: var(--accent); font-weight: 600; }
+  #menu .grp { color: #9aa3b8; font-size: 11px; padding: 7px 11px 2px; cursor: default; }
+  #menu .grp:hover { background: transparent; color: #9aa3b8; }
+  #menu hr { margin: 5px 4px; border: none; border-top: 1px solid #eef0f6; }
+  /* 尺寸 / 音色 一行三格 */
+  #menu .row { display: flex; gap: 4px; padding: 2px 6px; }
+  #menu .row b {
+    flex: 1; text-align: center; font-size: 12px; font-weight: 600; color: #4a5470;
+    background: #f2f5fd; border: 1px solid #e0e7f8; border-radius: 7px; padding: 5px 0;
+    cursor: pointer; white-space: nowrap;
+  }
+  #menu .row b:hover { background: var(--accent-soft); color: var(--accent); }
+  #menu .row b.on { background: var(--accent); color: #fff; border-color: var(--accent); }
+
+  #hint { position: absolute; left: 50%; bottom: 4px; transform: translateX(-50%);
+          font-size: 11px; color: #8b93ad; white-space: nowrap; opacity: 0; transition: opacity .3s; }
+  #hint.show { opacity: 1; }
+
+  #mute {
+    position: absolute; right: 0; top: 0; width: 24px; height: 24px;
+    border-radius: 50%; background: rgba(255,255,255,.92); color: var(--accent);
+    border: 1px solid #dbe3ff; box-shadow: 0 2px 6px rgba(30,50,120,.25);
+    font-size: 13px; line-height: 22px; text-align: center; cursor: pointer;
+    z-index: 50; user-select: none; padding: 0;
+  }
+  #mute:active { transform: scale(.9); }
+
+</style>
+</head>
+<body>
+<div id="stage">
+  <div id="pet">
+    <div id="bubble"></div>
+    <button id="mute" title="点击静音">🔊</button>
+    <div id="flip">
+      <div id="sprite">
+        <img id="body" src="char_whale.png" alt="桌宠">
+        <div id="spout"></div>
+      </div>
+    </div>
+  </div>
+
+  <div id="menu">
+    <div data-a="say">说点什么</div>
+    <div data-a="wander" class="on">自动游荡</div>
+    <div data-a="sound" class="on">音效</div>
+    <div data-a="voice">语音</div>
+    <hr>
+    <div class="grp">大小</div>
+    <div class="row" id="sizeRow">
+      <b data-size="0.55">小</b><b data-size="0.78">中</b><b data-size="1.0">大</b>
+    </div>
+    <hr>
+    <div class="grp">角色</div>
+    <div data-skin="whale">鲸鱼娘</div>
+    <div data-skin="gpt">白龙娘</div>
+    <div data-skin="claude">书卷娘</div>
+    <div data-skin="glm">猫耳娘</div>
+    <hr>
+    <div class="grp">音色（在线语音）</div>
+    <div class="row" id="voiceRow">
+      <b data-voice="whale">软糯</b><b data-voice="gpt">倨傲</b><b data-voice="claude">疏离</b><b data-voice="glm">俏皮</b>
+    </div>
+    <hr>
+    <div data-a="focus">专注模式（Ctrl+Alt+W 开关）</div>
+    <div data-a="auto">开机自启</div>
+    <hr>
+    <div data-a="reset">回到右下角</div>
+    <div data-a="quit">隐藏（关闭窗口）</div>
+  </div>
+  <div id="hint">拖动我 · 单击戳一戳 · 双击摸头 · 右键菜单</div>
+</div>
+
+<script>
+/* 与桌面宿主通信：命令进队列，宿主每 50ms 轮询取走；浏览器模式无人取，自动降级 */
+let HAS_HOST = false;
+let api = null;
+let __seq = 0;
+const __pending = {};
+const __queue = [];
+
+window.__apiResult = (id, val) => {
+  const r = __pending[id];
+  if(r){ r(val); delete __pending[id]; }
+};
+window.__drain = () => JSON.stringify(__queue.splice(0));
+
+function hostReady(){
+  return new Promise(resolve => {
+    let done = false;
+    const t = setInterval(() => {
+      if(window.__hostReady){
+        clearInterval(t);
+        if(done) return;
+        done = true;
+        HAS_HOST = true;
+        api = makeApi();
+        window.__api = api;
+        resolve();
+      }
+    }, 60);
+    setTimeout(() => { clearInterval(t); if(!done){ done = true; resolve(); } }, 5000);
+  });
+}
+
+function makeApi(){
+  const send = (cmd, arg, needId) => {
+    if(needId){
+      return new Promise(res => {
+        const id = ++__seq;
+        __pending[id] = res;
+        __queue.push({c: cmd, a: arg == null ? '' : String(arg), i: id});
+      });
+    }
+    __queue.push({c: cmd, a: arg == null ? '' : String(arg)});
+  };
+  return {
+    wander:           () => send('wander'),
+    drag_start:       () => send('drag_start'),
+    drag_end:         () => send('drag_end'),
+    to_corner:        () => send('to_corner'),
+    focus_mode:       () => send('focus_mode', '', true),
+    toggle_autostart: () => send('toggle_autostart', '', true),
+    autostart_state:  () => send('autostart_state', '', true),
+    speak:            t => send('speak', t),
+    get_cfg:          () => send('get_cfg', '', true),
+    set_cfg:          d => send('set_cfg', JSON.stringify(d)),
+    quit:             () => send('quit')
+  };
+}
+
+const pet = document.getElementById('pet');
+const flip = document.getElementById('flip');
+const bubble = document.getElementById('bubble');
+const menu = document.getElementById('menu');
+const hint = document.getElementById('hint');
+const sprite = document.getElementById('sprite');
+const spout = document.getElementById('spout');
+const bodyImg = document.getElementById('body');
+const stage = document.getElementById('stage');
+
+/* ============ 角色注册表 ============
+   一个角色 = 一张立绘 + 一套配色 + 一套说话风格 + 一套音色。
+   加角色只要往这里加一条，图丢进 WhalePet 目录即可。
+   voice 字段与 pet.pyw 的 VOICE_PRESETS 同名，宿主据此换音色。 */
+const SKINS = [
+  {
+    id:'whale', name:'鲸鱼娘', img:'char_whale.png',
+    accent:'#3d8ee0', soft:'#d2e6fb',
+    line:'饭……饭好了吗？',
+    persona:'一只吃白饭的蓝色大肥鱼。满脑子只有饭，呆萌迟钝，说话慢半拍',
+    talks:{
+      idle:['饭……','唔？在叫我吗','今天的米好香','鲸鱼也要吃饭的','发呆……饿……','海里有饭吗'],
+      cheer:['吃饱就……有力气了','慢慢来……不着急','你也要吃饭哦','摸摸……头','再坚持……一下下'],
+      cute:['蹭蹭……','投喂我一下就原谅你','嘿嘿……饭','尾巴……摇摇'],
+      remind:['该……吃饭了吧','喝水……也重要','坐久了对胃不好','眼睛……休息一下','肚子饿了会不开心的'],
+      study:['写完了……就吃饭','卡住的话……先吃口饭','慢慢想……不急','我陪你……但我要吃饭']
+    },
+    poke:['唔……','别戳……在吃饭','饭要洒了！','痒……','再戳就少一口饭','哼……'],
+    happy:['饭……变好吃了','开心……','再摸一下下','尾巴摇起来了','谢谢……你']
+  },
+  {
+    id:'gpt', name:'白龙娘', img:'char_dragon.png',
+    accent:'#8b6fd6', soft:'#e4daf9',
+    line:'……又是你啊。有事说事。',
+    persona:'白龙大小姐，眼高于顶、嘴上不饶人。嫌弃归嫌弃，活还是会干',
+    talks:{
+      idle:['有事说事。','……盯着我干嘛','我很闲吗？','要说快说','啧。','别发呆，浪费时间'],
+      cheer:['哼，这都不会？我教你。','慢死了……不过还行吧','勉强算你合格','别得意，还差得远'],
+      cute:['……别、别误会','谁要你夸','哼，算你有眼光','这种事也值得高兴？'],
+      remind:['去喝水。现在。','坐得跟个虾米似的，直起来','眼睛不要了？','该休息了，别硬撑'],
+      study:['这种题也要想这么久？','逻辑漏洞，第三行','重写。','……算了，我帮你看']
+    },
+    poke:['……你手贱？','找死？','再戳一下试试','啧，幼稚','别碰我'],
+    happy:['……哼','勉强，有点开心','别得寸进尺','就这一次']
+  },
+  {
+    id:'claude', name:'书卷娘', img:'char_book.png',
+    accent:'#c96a2b', soft:'#f7ddc6',
+    line:'……嗯，我在。你说吧。',
+    persona:'抱着书的橙发学姐，半垂着眼、话少而沉。表面疏离，其实一直在听',
+    talks:{
+      idle:['……嗯。','在看书，你说','就这样坐着也挺好','不必勉强说话','我看着就行'],
+      cheer:['慢一点也没关系','你已经想得很清楚了','这确实不容易','……但你做到了'],
+      cute:['……谢谢','嗯，我记住了','这样很好','你这么说，我会不好意思'],
+      remind:['眼睛该休息了','起来走走','水，喝了么','别熬太晚'],
+      study:['这段的关键词是哪个？','先理清前提','长文档拆开看','需要我读一遍吗']
+    },
+    poke:['……怎么了','嗯？','我在看书','……好吧'],
+    happy:['……谢谢','这样很好','我很高兴','嗯。']
+  },
+  {
+    id:'glm', name:'猫耳娘', img:'char_cat.png',
+    accent:'#3f3a6b', soft:'#dcd8ee',
+    line:'喵～找我？我可是很贵的哦。',
+    persona:'猫耳狼尾的小恶魔，笑着使坏。爱逗人、爱偷懒，但推理时毫不含糊',
+    talks:{
+      idle:['喵～在忙吗？','摸鱼中，勿扰','要不要偷个懒？','我刚刚眯了一会儿','Zzz……啊，没睡'],
+      cheer:['编程能力嘛，我不比谁差','你行的，我算过了','别慌，有我呢','这题有捷径哦'],
+      cute:['喵～多夸两句','嘿嘿，上钩了','那我要奖励','你脸红什么'],
+      remind:['该摸鱼了','坐这么久，尾巴都僵了','喝口水嘛','别卷了，陪我玩会儿'],
+      study:['边界条件想了吗？','这个证明有个洞','先假设，再推翻','我帮你验一遍']
+    },
+    poke:['喵！','再戳咬你哦','手拿开～','嘻嘻，痒','你完了（笑）'],
+    happy:['喵呜～','这还差不多','再摸摸','算你识相']
+  }
+];
+let currentSkin = 'whale';
+let currentScale = 0.78;
+
+/* 图片缺失时兜底回默认形象，避免换装后白屏 */
+bodyImg.addEventListener('error', () => {
+  if(bodyImg.getAttribute('src') !== 'char_whale.png') bodyImg.src = 'char_whale.png';
+});
+
+/* 取某个角色的某个语料池：没有就回落到它 base 指向的角色，再回落到鲸鱼娘 */function pool(kind){
+  const s = cur();
+  const src = (s.talks && s.talks[kind]) || (baseSkin(s).talks && baseSkin(s).talks[kind]) || [];
+  return src.length ? src : (SKINS[0].talks[kind] || ['在呢～']);
+}
+function baseSkin(s){
+  if(s.base){ const b = SKINS.find(x => x.id === s.base); if(b) return b; }
+  return s;
+}
+function cur(){ return SKINS.find(x => x.id === currentSkin) || SKINS[0]; }
+
+function applyScale(v, silent){
+  const s = Math.max(0.55, Math.min(1.0, parseFloat(v) || 0.78));
+  currentScale = s;
+  stage.style.transform = 'scale(' + s + ')';
+  // 窗口由宿主同步 resize；浏览器模式下面板宽度也跟着缩，便于预览
+  document.querySelectorAll('#sizeRow b').forEach(el => {
+    el.classList.toggle('on', Math.abs(parseFloat(el.dataset.size) - s) < 0.01);
+  });
+  if(silent) return;
+  if(HAS_HOST) api.set_cfg({ scale: s });
+}
+
+function applySkin(id, silent){
+  const s = SKINS.find(x => x.id === id) || SKINS[0];
+  currentSkin = s.id;
+  bodyImg.src = s.img;
+  const root = document.documentElement.style;
+  root.setProperty('--accent', s.accent);
+  root.setProperty('--accent-soft', s.soft);
+  document.querySelectorAll('#menu [data-skin]').forEach(el => {
+    el.classList.toggle('on', el.dataset.skin === s.id);
+  });
+  // 换角色时音色跟着走 —— 除非用户手动挑过音色（voicePinned）
+  if(!voicePinned) applyVoice(voiceOf(s), true);
+  if(silent) return;
+  if(HAS_HOST) api.set_cfg({ skin: s.id });
+  anim('jump', 720); beep(760, .1, 'sine');
+  fx('✦', 3);
+  say(s.line || s.name, 2600);
+}
+
+const TALK_KEYS = ['idle','cheer','cute','remind','study'];
+function randomTalk(){ return pick(pool(pick(TALK_KEYS))); }
+
+const TIMETALKS = {
+  morning:   ['早安～新的一天加油！','早上好呀，记得吃早饭','清晨的第一句话送给你：冲鸭','睡得好吗？今天也要元气满满'],
+  noon:      ['中午啦，去吃饭没？','午休一下下嘛，别累着','吃饱才有力气继续干'],
+  afternoon: ['下午好～','困了就喝口水伸个懒腰','离下课又近了一点','摸会儿鱼也挺好，别太狠'],
+  evening:   ['晚上好呀～','今天也辛苦啦','晚饭吃了吗？别饿着','忙完记得放松一下哦'],
+  night:     ['这么晚还没睡？快去休息！','熬夜对身体不好哦，睡吧','深夜了，陪你到困为止','早点睡，明天见～']
+};
+function timeTalk(){
+  const h = new Date().getHours();
+  const key = (h >= 5 && h < 11) ? 'morning'
+            : (h >= 11 && h < 14) ? 'noon'
+            : (h >= 14 && h < 18) ? 'afternoon'
+            : (h >= 18 && h < 23) ? 'evening'
+            : 'night';
+  return pick(TIMETALKS[key]);
+}
+
+let roam = true, soundOn = true, voiceOn = false, dragging = false, moved = false;
+let sleeping = false, idleTimer = null, roamTimer = null;
+let sayTimer = null, focusMode = false, autoStart = false, talkTimer = null;
+
+const pick = a => a[Math.floor(Math.random() * a.length)];
+
+function say(text, ms){
+  clearTimeout(sayTimer);
+  bubble.textContent = text;
+  bubble.classList.add('show');
+  sayTimer = setTimeout(() => { if(!sleeping) bubble.classList.remove('show'); }, ms || 2600);
+  // 语音开启时，让桌宠把这句念出来（睡眠提示不念）
+  if(HAS_HOST && voiceOn && !sleeping && text){
+    api.speak(text);
+    // 说话时给"嘴巴在动"的小动画 + 飘音符，按字数估算念白时长
+    const dur = Math.min(6000, Math.max(1200, text.length * 220));
+    pet.classList.add('talk');
+    clearTimeout(talkTimer);
+    talkTimer = setTimeout(() => pet.classList.remove('talk'), dur);
+    fx('♪', 2);
+  }
+}
+
+function beep(freq, dur, type){
+  if(!soundOn || sleeping) return;
+  try{
+    const ctx = beep.ctx || (beep.ctx = new (window.AudioContext || window.webkitAudioContext)());
+    const o = ctx.createOscillator(), g = ctx.createGain();
+    o.type = type || 'sine'; o.frequency.value = freq;
+    g.gain.setValueAtTime(.0001, ctx.currentTime);
+    g.gain.exponentialRampToValueAtTime(.14, ctx.currentTime + .015);
+    g.gain.exponentialRampToValueAtTime(.0001, ctx.currentTime + (dur || .18));
+    o.connect(g); g.connect(ctx.destination);
+    o.start(); o.stop(ctx.currentTime + (dur || .18));
+  }catch(e){}
+}
+
+function fx(emoji, n){
+  const r = sprite.getBoundingClientRect();
+  for(let i = 0; i < (n || 3); i++){
+    const s = document.createElement('div');
+    s.className = 'fx'; s.textContent = emoji;
+    s.style.left = (r.left + r.width * (.3 + Math.random() * .4)) + 'px';
+    s.style.top  = (r.top + r.height * (.15 + Math.random() * .2)) + 'px';
+    s.style.animationDelay = (i * .14) + 's';
+    document.getElementById('stage').appendChild(s);
+    setTimeout(() => s.remove(), 1500);
+  }
+}
+
+function anim(cls, ms){
+  pet.classList.add(cls);
+  setTimeout(() => pet.classList.remove(cls), ms);
+}
+
+function face(dir){ flip.classList.toggle('left', dir < 0); }
+
+function spur(){
+  beep(880, .18, 'sine');
+  for(let i = 0; i < 6; i++){
+    const d = document.createElement('div');
+    d.className = 'drop';
+    d.style.setProperty('--dx', (Math.random() * 50 - 25) + 'px');
+    d.style.animation = `spurt ${.9 + Math.random() * .5}s ease-out forwards`;
+    d.style.animationDelay = (i * .06) + 's';
+    spout.appendChild(d);
+    setTimeout(() => d.remove(), 1800);
+  }
+}
+
+function resetIdle(){
+  clearTimeout(idleTimer);
+  if(sleeping) wake();
+  idleTimer = setTimeout(sleep, 180000);
+}
+function sleep(){
+  sleeping = true;
+  pet.classList.add('sleep');
+  say('Zzz… 有点困了', 999999);
+}
+function wake(){
+  sleeping = false;
+  pet.classList.remove('sleep');
+  bubble.classList.remove('show');
+  say(randomTalk(), 2400);
+}
+
+/* 游荡由宿主（Qt 定时器）平滑移动窗口 */
+function wander(){ if(HAS_HOST) api.wander(); }
+
+/* 浏览器模式：页面内漫游 */
+function walk(){
+  const W = window.innerWidth - 260, H = window.innerHeight - 400;
+  pet.classList.add('walk');
+  pet.style.left = Math.max(0, Math.random() * W) + 'px';
+  pet.style.top  = Math.max(0, Math.random() * H) + 'px';
+  setTimeout(() => pet.classList.remove('walk'), 2500);
+}
+
+function loopRoam(){
+  clearTimeout(roamTimer);
+  roamTimer = setTimeout(() => {
+    if(roam && !dragging && !sleeping){
+      const r = Math.random();
+      if(HAS_HOST){ if(r < .5) wander(); else if(r < .7) spur(); else say(Math.random() < .3 ? timeTalk() : randomTalk(), 2600); }
+      else { if(r < .4) walk(); else if(r < .62) spur(); else say(Math.random() < .3 ? timeTalk() : randomTalk(), 2600); }
+    }
+    loopRoam();
+  }, 5000 + Math.random() * 7000);
+}
+
+let dragStarted = false;
+pet.addEventListener('mousedown', e => {
+  if(e.button !== 0) return;
+  resetIdle();
+  dragging = true; moved = false; dragStarted = false;
+  pet.dataset.lx = e.clientX; pet.dataset.ly = e.clientY;
+  if(!HAS_HOST){
+    const r = pet.getBoundingClientRect();
+    pet.dataset.ox = e.clientX - r.left;
+    pet.dataset.oy = e.clientY - r.top;
+    pet.style.transition = 'none';
+    pet.classList.add('walk');
+  }
+});
+window.addEventListener('mousemove', e => {
+  if(!dragging) return;
+  const lx = +pet.dataset.lx, ly = +pet.dataset.ly;
+  if(!moved && Math.abs(e.clientX - lx) + Math.abs(e.clientY - ly) > 3) moved = true;
+  if(HAS_HOST){
+    // 只有真正拖动（移动超过阈值）才让宿主开始跟随，单纯点击不会黏住鼠标
+    if(moved && !dragStarted){ dragStarted = true; api.drag_start(); }
+  }else if(moved){
+    const ox = +pet.dataset.ox, oy = +pet.dataset.oy;
+    pet.style.left = Math.max(-40, Math.min(window.innerWidth - 180, e.clientX - ox)) + 'px';
+    pet.style.top  = Math.max(-20, Math.min(window.innerHeight - 120, e.clientY - oy)) + 'px';
+  }
+});
+window.addEventListener('mouseup', () => {
+  if(!dragging) return;
+  dragging = false;
+  pet.style.transition = '';
+  setTimeout(() => pet.classList.remove('walk'), 30);
+  // 无论是否移动过，只要确实开始了拖动，松开就停止跟随
+  if(HAS_HOST && dragStarted){ api.drag_end(); dragStarted = false; }
+});
+
+pet.addEventListener('click', () => {
+  if(moved) return;
+  resetIdle();
+  anim('poke', 520);
+  beep(520, .12, 'triangle');
+  say(pick(pool('poke')), 1800);
+});
+pet.addEventListener('dblclick', () => {
+  resetIdle();
+  anim('happy', 820);
+  beep(660, .12, 'sine'); setTimeout(() => beep(880, .16, 'sine'), 110);
+  fx('♥', 4);
+  say(pick(pool('happy')), 2000);
+});
+
+window.addEventListener('contextmenu', e => {
+  e.preventDefault();
+  if(focusMode) return;
+  resetIdle();
+  // 先显示、再量真实尺寸，然后把菜单钳进窗口内；比窗口还高时菜单自身可滚动
+  menu.classList.add('show');
+  const s = currentScale;
+  const mw = menu.offsetWidth * s, mh = menu.offsetHeight * s;
+  const vw = window.innerWidth, vh = window.innerHeight;
+  menu.style.left = (Math.max(2, Math.min(e.clientX, vw - mw - 2)) / s) + 'px';
+  menu.style.top  = (Math.max(2, Math.min(e.clientY, vh - mh - 2)) / s) + 'px';
+});
+window.addEventListener('click', () => menu.classList.remove('show'));
+
+menu.addEventListener('click', async e => {
+  const sk = e.target.dataset.skin;
+  if(sk){ applySkin(sk); return; }
+  const vc = e.target.dataset.voice;
+  if(vc){ applyVoice(vc); beep(820, .08, 'sine'); return; }
+  const sz = e.target.dataset.size;
+  if(sz){ applyScale(sz); beep(700, .08, 'sine'); return; }
+  const a = e.target.dataset.a;
+  if(!a) return;
+  if(a === 'say'){ anim('jump', 720); beep(760, .1, 'sine'); say(randomTalk(), 2600); }
+
+  if(a === 'wander'){
+    roam = !roam;
+    e.target.classList.toggle('on', roam);
+    if(roam) loopRoam();
+  }
+  if(a === 'sound'){
+    soundOn = !soundOn;
+    e.target.classList.toggle('on', soundOn);
+    syncMute();
+    beep(700, .1, 'sine');
+  }
+  if(a === 'voice'){
+    voiceOn = !voiceOn;
+    e.target.classList.toggle('on', voiceOn);
+    if(HAS_HOST) api.set_cfg({ voice: voiceOn });
+    if(voiceOn){
+      if(HAS_HOST) api.speak('语音打开啦，我可以开口说话了');
+      else say('浏览器模式没有语音引擎哦', 2200);
+    }else{
+      say('语音已关闭', 1600);
+    }
+  }
+  if(a === 'focus'){
+    if(!HAS_HOST){ say('浏览器模式不支持穿透哦', 2000); return; }
+    focusMode = await api.focus_mode();
+    if(focusMode) say('进入专注模式，30 分钟后自动恢复（Ctrl+Alt+W 可提前退出）', 4200);
+  }
+  if(a === 'auto'){
+    if(!HAS_HOST){ say('浏览器模式不支持自启哦', 2000); return; }
+    autoStart = await api.toggle_autostart();
+    e.target.classList.toggle('on', !!autoStart);
+    say(autoStart ? '已加入开机自启' : '已取消开机自启', 1800);
+  }
+  if(a === 'reset'){
+    say('回来啦～', 1600);
+    if(HAS_HOST) api.to_corner();
+    else { pet.style.left = '15px'; pet.style.top = '15px'; }
+  }
+  if(a === 'quit'){
+    say('拜拜，记得喝水～', 1500);
+    if(HAS_HOST) setTimeout(() => api.quit(), 900);
+  }
+});
+
+window.__face = face;
+window.__setFocus = v => { focusMode = !!v; if(!v) menu.classList.remove('show'); };
+/* 宿主缩放窗口后调用，让菜单定位用上最新尺寸 */
+window.__onResize = () => menu.classList.remove('show');
+
+/* 静音按钮：常驻右上角，点一下静音/取消，与菜单“音效”状态同步 */
+const muteBtn = document.getElementById('mute');
+function syncMute(){
+  muteBtn.textContent = soundOn ? '🔊' : '🔇';
+  muteBtn.title = soundOn ? '点击静音' : '点击取消静音';
+}
+muteBtn.addEventListener('mousedown', e => e.stopPropagation());
+muteBtn.addEventListener('click', e => {
+  e.stopPropagation();
+  soundOn = !soundOn;
+  syncMute();
+  const sItem = document.querySelector('[data-a="sound"]');
+  if(sItem) sItem.classList.toggle('on', soundOn);
+  if(soundOn) beep(700, .1, 'sine');
+});
+syncMute();
+
+/* ============ 音色库 ============
+   与角色解耦：角色决定"默认用哪个音色"，这里决定"音色本身长什么样"。
+   voice id 与 pet.pyw 的 VOICE_PRESETS 一一对应，宿主据此换嗓音/语速/音调/音量。 */
+const VOICES = {
+  whale:  {label:'软糯', accent:'#3d8ee0'},
+  gpt:    {label:'倨傲', accent:'#8b6fd6'},
+  claude: {label:'疏离', accent:'#c96a2b'},
+  glm:    {label:'俏皮', accent:'#3f3a6b'}
+};
+const DEFAULT_VOICE = 'whale';
+function voiceOf(s){ return (s && s.voice) || DEFAULT_VOICE; }
+function applyVoice(v, silent){
+  if(!VOICES[v]) v = DEFAULT_VOICE;
+  currentVoice = v;
+  voicePinned = true;     // 手动选过之后，换角色不再自动覆盖音色
+  document.querySelectorAll('#voiceRow b').forEach(el => {
+    el.classList.toggle('on', el.dataset.voice === v);
+  });
+  if(silent) return;
+  if(HAS_HOST) api.set_cfg({ voice_style: v });
+  const lb = VOICES[v].label;
+  say('音色换成「' + lb + '」了', 2200);
+  if(HAS_HOST && voiceOn) api.speak('这是我的新声音，' + lb + '。');
+}
+let currentVoice = DEFAULT_VOICE;
+let voicePinned = false;
+
+/* 深夜提醒：很晚还不睡就催你去休息（每 20 分钟最多提示一次，跨天自动重置） */
+const NIGHT_REMIND = ['已经很晚了，该去睡啦','熬夜伤身哦，早点休息吧','眼皮打架了吗？快闭眼～','深夜了，陪你到最后，但记得睡'];
+let nightRemindedAt = 0;
+function nightWatch(){
+  const h = new Date().getHours();
+  const late = (h >= 23 || h < 5);
+  if(late && !sleeping){
+    const now = Date.now();
+    if(now - nightRemindedAt > 20 * 60 * 1000){
+      nightRemindedAt = now;
+      say(pick(NIGHT_REMIND), 4200);
+    }
+  } else {
+    nightRemindedAt = 0;
+  }
+}
+setInterval(nightWatch, 60 * 1000);
+
+(async function main(){
+  await hostReady();
+  if(!HAS_HOST){
+    document.querySelector('[data-a="focus"]').style.display = 'none';
+    document.querySelector('[data-a="auto"]').style.display = 'none';
+    document.querySelector('[data-a="voice"]').style.display = 'none';
+  }else{
+    try{
+      autoStart = await api.autostart_state();
+      document.querySelector('[data-a="auto"]').classList.toggle('on', !!autoStart);
+    }catch(e){}
+    // 拉取持久化设置（静音/游荡/语音/角色/尺寸），应用到页面状态与菜单勾选
+    try{
+      const cfg = await api.get_cfg();
+      if(cfg){
+        voiceOn = !!cfg.voice;
+        soundOn = cfg.sound !== false;
+        roam = cfg.wander !== false;
+        document.querySelector('[data-a="voice"]').classList.toggle('on', voiceOn);
+        document.querySelector('[data-a="sound"]').classList.toggle('on', soundOn);
+        document.querySelector('[data-a="wander"]').classList.toggle('on', roam);
+        syncMute();
+        if(cfg.skin) applySkin(cfg.skin, true);
+        applyVoice(cfg.voice_style || (cur().voice) || DEFAULT_VOICE, true);
+        applyScale(cfg.scale != null ? cfg.scale : currentScale, true);
+      }
+    }catch(e){}
+  }
+  resetIdle();
+  loopRoam();
+  setTimeout(() => {
+    hint.classList.add('show');
+    say(timeTalk(), 3200);
+    setTimeout(() => hint.classList.remove('show'), 5000);
+  }, 400);
+})();
+</script>
+</body>
+</html>

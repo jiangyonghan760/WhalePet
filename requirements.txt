@@ -1,0 +1,6 @@
+# 运行桌宠本体只需要这几个包。
+# 都是纯 Python 轮子，Windows / macOS / Linux 通用，无需额外系统组件。
+PySide6>=6.6.0          # 透明无边框窗口 + QtWebEngine（Chromium 内核）
+PySide6-Addons>=6.6.0   # QtWebEngine 在 Addons 里，必需
+edge-tts>=6.1.9         # 在线神经语音（微软 Edge 朗读引擎）。免费、免 API key
+pyttsx3>=2.90           # 离线语音兜底（Windows 走 SAPI，macOS 走 NSSpeechSynthesizer）
