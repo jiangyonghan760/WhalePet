@@ -1,12 +1,15 @@
-# WhalePet · AI 桌宠
+# WhalePet · 桌面宠物
 
-四个 AI 娘住在你桌面上。她们会自己溜达、会跟你说话，**每个人说话的语气和声音都不一样**。
+**四个会溜达、会说话的 AI 娘住在你的桌面上 —— 每个人有自己的语气和她自己的声音。**
 
-支持 Windows / macOS / Linux，Python 3.9+。
+Four AI girls living on your desktop — they wander, they talk, and each one has
+her own personality and her own voice.
+
+跨平台桌面宠物 / Cross-platform desktop pets · Windows · macOS · Linux · Python 3.9+
 
 ---
 
-## 她们是谁
+## 她们是谁 · The Cast
 
 | 角色 | 人设 | 声音 | 语气示例 |
 |---|---|---|---|
@@ -19,10 +22,10 @@
 
 ---
 
-## 快速开始
+## 快速开始 · Quick Start
 
 ```bash
-git clone <你的仓库地址>
+git clone https://github.com/jiangyonghan760/WhalePet.git
 cd WhalePet
 python install_deps.py     # 装依赖
 python run.py              # 启动
@@ -35,7 +38,7 @@ Windows 用户直接双击 **`launch.bat`** 也行。只想先看看立绘长啥
 
 ---
 
-## 怎么玩
+## 怎么玩 · Interactions
 
 | 操作 | 效果 |
 |---|---|
@@ -49,7 +52,7 @@ Windows 用户直接双击 **`launch.bat`** 也行。只想先看看立绘长啥
 
 ---
 
-## 语音是怎么回事
+## 语音是怎么回事 · How the Voice Works
 
 语音分两层，**在线优先、离线兜底**，换台电脑也能用。
 
@@ -66,7 +69,7 @@ Windows 用户直接双击 **`launch.bat`** 也行。只想先看看立绘长啥
 
 ---
 
-## 自定义
+## 自定义 · Customization
 
 加一个角色只要三步：
 
@@ -76,7 +79,7 @@ Windows 用户直接双击 **`launch.bat`** 也行。只想先看看立绘长啥
 
 菜单里的角色项直接复制一行 `<div data-skin="你的id">名字</div>` 就行。**加角色不需要动其他代码**。
 
-### 音调参数怎么调
+### 音调参数怎么调 · Tuning Pitch
 
 `pitch` 是拉开音色差异最有效的旋钮，单位是 Hz：
 
@@ -86,7 +89,7 @@ Windows 用户直接双击 **`launch.bat`** 也行。只想先看看立绘长啥
 
 ---
 
-## 项目结构
+## 项目结构 · Layout
 
 ```
 WhalePet/
@@ -105,7 +108,7 @@ WhalePet/
 
 ---
 
-## 原理
+## 原理 · How It Works
 
 宿主（PySide6）开一个透明无边框置顶窗口，里面塞一个 `QWebEngineView` 加载 `whale.html`。
 两边通过一个**轮询式命令队列**通信：页面把 `{c: 命令, a: 参数, i: 请求id}` 推进 `__queue`，
@@ -117,7 +120,7 @@ WhalePet/
 
 ---
 
-## 已知限制
+## 已知限制 · Known Limitations
 
 - **全局快捷键和开机自启只有 Windows 有**。macOS / Linux 上这两个菜单项不可用，专注模式仍可从菜单进入（30 分钟自动退出）。
 - 语音播放：Windows 用系统自带 `winmm`；macOS / Linux 需要 `afplay` / `mpg123` / `ffplay` 三者之一，都没有的话语音静默跳过（其他功能不受影响）。
@@ -125,11 +128,11 @@ WhalePet/
 
 ---
 
-## 立绘说明
+## 立绘说明 · Artwork
 
 仓库里的立绘和角色均为**原创**，跟着代码一起以 MIT 协议开源。角色名（鲸鱼娘 / 白龙娘 / 书卷娘 / 猫耳娘）是
 按形象特征起的描述性名字，不含任何品牌指向。
 
-## 许可
+## 许可 · License
 
 MIT
